@@ -23,7 +23,7 @@ constrain memory usage and need to move a lot of data through a pipeline.
 - Be lock-free, so no possibility of deadlocks for the caller.
 
 ## Usage
-Godoc [Godoc](http://pkg.go.dev/github.com/iamcalledrob/circular)
+[Godoc](http://pkg.go.dev/github.com/iamcalledrob/circular)
 
 ```go
 // Allocate a new buffer
