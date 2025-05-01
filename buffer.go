@@ -16,8 +16,8 @@ import (
 // Instantiate with a Buf of desired length, e.g: &Buffer{ Buf: make([]byte, 1024) }
 type Buffer struct {
 	Buf  []byte
-	head uint64 // Number of bytes ever written
-	tail uint64 // Number of bytes ever read
+	head atomic.Uint64 // Number of bytes ever written
+	tail atomic.Uint64 // Number of bytes ever read
 }
 
 func NewBuffer(n int) *Buffer {
@@ -36,8 +36,8 @@ func (b *Buffer) Read(p []byte) (n int, err error) {
 		return
 	}
 
-	tail := atomic.LoadUint64(&b.tail)
-	length := atomic.LoadUint64(&b.head) - tail
+	tail := b.tail.Load()
+	length := b.head.Load() - tail
 
 	if length == 0 {
 		return 0, io.EOF
@@ -57,7 +57,7 @@ func (b *Buffer) Read(p []byte) (n int, err error) {
 	// Noop (n=0) if all the bytes were copied above
 	n += copy(dest[n:], b.Buf[:len(dest)-n])
 
-	atomic.AddUint64(&b.tail, uint64(n))
+	b.tail.Add(uint64(n))
 	return
 }
 
@@ -72,8 +72,8 @@ func (b *Buffer) Write(p []byte) (n int, err error) {
 		return
 	}
 
-	head := atomic.LoadUint64(&b.head)
-	length := head - atomic.LoadUint64(&b.tail)
+	head := b.head.Load()
+	length := head - b.tail.Load()
 	space := uint64(len(b.Buf)) - length
 
 	// Creates a reslice of p that's truncated to the buffer's free space—so we can copy all of
@@ -91,7 +91,7 @@ func (b *Buffer) Write(p []byte) (n int, err error) {
 	// Noop (n=0) if all bytes were copied above
 	n += copy(b.Buf[:len(src)-n], src[n:])
 
-	atomic.AddUint64(&b.head, uint64(n))
+	b.head.Add(uint64(n))
 	return
 }
 
@@ -100,7 +100,7 @@ func (b *Buffer) Write(p []byte) (n int, err error) {
 // Calls to Len are thread-safe, however the value returned may immediately be stale if a Read or
 // Write completes concurrently.
 func (b *Buffer) Len() int {
-	return int(atomic.LoadUint64(&b.head) - atomic.LoadUint64(&b.tail))
+	return int(b.head.Load() - b.tail.Load())
 }
 
 // Space returns the capacity the buffer has to hold more data.
@@ -120,8 +120,8 @@ func (b *Buffer) Cap() int {
 //
 // Calls to Reset are not thread-safe, and should not be called concurrently with Read or Write.
 func (b *Buffer) Reset() {
-	atomic.StoreUint64(&b.head, 0)
-	atomic.StoreUint64(&b.tail, 0)
+	b.head.Store(0)
+	b.tail.Store(0)
 }
 
 // ErrNoSpace is the error returned by Write when bytes written is < len(p) due to limited space
